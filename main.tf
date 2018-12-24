@@ -1,3 +1,14 @@
+#Setting up connection variables
+variable "connection_type" {
+  default = "ssh"
+}
+variable "connection_user" {
+  default = "luiledez"
+}
+variable "connection_private_key" {
+  default = "/Users/luiledez/.ssh/luiledez.local"
+}
+
 #Setting up our provider as Google Cloud Platform
 provider "google" {
   project = "gorilla-challenge"
@@ -23,47 +34,43 @@ resource "google_compute_instance" "jenkins_instance" {
     }
   }
 
-  #This will install Jenkins Docker container on the instance
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get -y install apt-transport-https dirmngr",
-      "sudo sh -c \"echo 'deb https://apt.dockerproject.org/repo debian-stretch main' >> /etc/apt/sources.list\"",
-      "sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys F76221572C52609D",
-      "sudo apt-get -y update",
-      "sudo apt-get -y install docker-engine",
-      "sudo docker pull jenkins/jenkins:lts",
-      "sudo docker run -e JAVA_OPTS='-Djenkins.install.runSetupWizard=false' --name jenkins -d -v jenkins_home:/var/jenkins_home -p 8080:8080 -p 50000:50000 jenkins/jenkins:lts"
-    ]
-
-    connection {
-	  type     = "ssh"
-	  user     = "luiledez"
-	  private_key = "${file("/Users/luiledez/.ssh/luiledez.local")}"
-	}
-  }
-
   provisioner "file" {
     source = "jenkins"
     destination = "/tmp/jenkins"
 
     connection {
-	  type     = "ssh"
-	  user     = "luiledez"
-	  private_key = "${file("/Users/luiledez/.ssh/luiledez.local")}"
-	}
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
   }
 
+  provisioner "file" {
+    source = "utils/install-docker.sh"
+    destination = "/tmp/install-docker.sh"
+
+    connection {
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
+  }
+
+  #This will install Jenkins Docker container on the instance
   provisioner "remote-exec" {
     inline = [
+      "sudo bash /tmp/install-docker.sh",
+      "sudo docker build -t jenkins-custom /tmp/jenkins",
+      "sudo docker run --name jenkins -d -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker -p 8080:8080 -p 50000:50000 jenkins-custom",
       "sudo rsync -avh /tmp/jenkins/* /var/lib/docker/volumes/jenkins_home/_data/",
       "sudo docker container restart jenkins"
     ]
 
     connection {
-	  type     = "ssh"
-	  user     = "luiledez"
-	  private_key = "${file("/Users/luiledez/.ssh/luiledez.local")}"
-	}
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
   }
 }
 
@@ -91,20 +98,27 @@ resource "google_compute_instance" "app_instance" {
     destination = "~/app"
 
     connection {
-	  type     = "ssh"
-	  user     = "luiledez"
-	  private_key = "${file("/Users/luiledez/.ssh/luiledez.local")}"
-	}
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
+  }
+
+  provisioner "file" {
+    source = "utils/install-docker.sh"
+    destination = "/tmp/install-docker.sh"
+
+    connection {
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
   }
 
   #This will deploy application for the first time
   provisioner "remote-exec" {
     inline = [
-      "sudo apt-get -y install apt-transport-https dirmngr",
-      "sudo sh -c \"echo 'deb https://apt.dockerproject.org/repo debian-stretch main' >> /etc/apt/sources.list\"",
-      "sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys F76221572C52609D",
-      "sudo apt-get -y update",
-      "sudo apt-get -y install docker-engine",
+      "sudo bash /tmp/install-docker.sh",
       "sudo mkdir /data",
       "cd /data",
       "sudo git clone https://github.com/luis-ledezma/timeoff-management",
@@ -114,10 +128,10 @@ resource "google_compute_instance" "app_instance" {
     ]
 
     connection {
-	  type     = "ssh"
-	  user     = "luiledez"
-	  private_key = "${file("/Users/luiledez/.ssh/luiledez.local")}"
-	}
+      type = "${var.connection_type}"
+	  user = "${var.connection_user}"
+	  private_key = "${file(var.connection_private_key)}"
+    }
   }
 }
 
